@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Usage Tracker",
+  "version": "1.0.0",
+  "description": "Tracks daily active usage time on YouTube, Instagram, and Strava",
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms",
+    "windows"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.instagram.com/*",
+    "*://*.strava.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.instagram.com/*",
+        "*://*.strava.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Usage Tracker Dashboard"
+  }
+}
