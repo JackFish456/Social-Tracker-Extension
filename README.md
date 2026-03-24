@@ -1,120 +1,130 @@
 # Usage Tracker
 
-A Chrome extension (Manifest V3) that tracks daily active usage time on **YouTube**, **Instagram**, and **Strava**. Data is stored locally and displayed in a floating bubble and a dashboard with charts.
+A **Chrome extension** (Manifest V3) that measures **active** time on **YouTube**, **Instagram**, and **Strava**. It shows a small on-page bubble, a full **dashboard** with charts, and optional **weekly cap reminders** (warnings only—no blocking). Everything is stored **locally**; nothing is sent to external servers.
 
-## Features
+**Repository:** [Social-Tracker-Extension](https://github.com/JackFish456/Social-Tracker-Extension) (this codebase ships as the extension **Usage Tracker** in `manifest.json`.)
 
-- **Active time only**: Counts time when the tab is active, the window is focused, and you're on a supported site
-- **Floating bubble**: Minimal bubble on supported pages showing today and week usage; can be collapsed or hidden
-- **Dashboard**: 7-day or 30-day charts, summary stats (today, week, month), breakdown by site
-- **Local storage**: All data stays in `chrome.storage.local`; nothing is sent externally
+---
 
-## Supported Sites
+## User guide
 
-| Site Key | Domains |
-|----------|---------|
-| youtube | youtube.com and subdomains (m.youtube.com, music.youtube.com, etc.) |
-| instagram | instagram.com and subdomains |
-| strava | strava.com and subdomains |
+Step-by-step installation and feature explanations (bubble, dashboard, caps, what counts as time) live in **[HOW_TO_USE.md](HOW_TO_USE.md)**.
 
-## Project Structure
+---
 
-```
-.
-├── manifest.json          # Extension manifest (MV3)
-├── background.js          # Service worker (built)
-├── content.js             # Content script (built)
-├── content.css            # Bubble styles
-├── dashboard.html         # Dashboard page
-├── dashboard.js           # Dashboard React app (built)
-├── dashboard.css          # Dashboard styles
-├── package.json           # Dependencies and build scripts
-├── build.js               # Build script (esbuild)
-├── tsconfig.json          # TypeScript config
-├── src/
-│   ├── types.ts           # Shared types
-│   ├── config.ts          # Supported sites config
-│   ├── background/
-│   │   ├── index.ts       # Service worker entry
-│   │   └── tracker.ts     # Time-tracking logic
-│   ├── content/
-│   │   ├── index.ts       # Content script entry
-│   │   └── bubble.tsx     # Floating bubble UI
-│   ├── dashboard/
-│   │   ├── index.tsx      # Dashboard entry
-│   │   ├── Dashboard.tsx  # Main dashboard
-│   │   └── Chart.tsx      # Bar chart component
-│   └── utils/
-│       ├── site.ts        # URL/site detection
-│       ├── format.ts      # Formatting (seconds, date keys)
-│       ├── storage.ts     # Chrome storage helpers
-│       └── chart.ts       # Chart data series
-└── README.md
-```
+## Features at a glance
 
-## Setup & Load
+| Feature | Description |
+|--------|-------------|
+| **Active time only** | Counts time when the tab is active, the window is focused, and the URL is a supported site. |
+| **Floating bubble** | Today / week for the current site; collapse, hide, snooze 1h, open dashboard; position is configurable. |
+| **Dashboard** | Summary (today / week / month), **7** or **30**‑day chart, per-site breakdown, bubble visibility and position, weekly caps. |
+| **Weekly caps** | Optional minutes per site per week; UI highlights when you are over—**does not block** the site. |
+| **Local-only data** | `chrome.storage.local`; no network upload for usage. |
 
-### No-build (ready to use)
+### Supported sites
 
-The extension includes pre-built vanilla JS files (`background.js`, `content.js`, `dashboard.js`). You can load it immediately without any build step:
+| Site | Matching |
+|------|----------|
+| YouTube | `youtube.com` and subdomains (e.g. `m.youtube.com`, `music.youtube.com`) |
+| Instagram | `instagram.com` and subdomains |
+| Strava | `strava.com` and subdomains |
 
-1. Open Chrome and go to `chrome://extensions`
-2. Enable **Developer mode** (toggle in the top-right)
-3. Click **Load unpacked**
-4. Select the extension folder (the one containing `manifest.json`)
+---
 
-### Optional: Build from TypeScript/React source
+## Quick install (no build)
 
-The `src/` directory contains TypeScript and React sources. To rebuild:
+Prebuilt bundles (`background.js`, `content.js`, `dashboard.js`) are included. You can load the extension immediately:
+
+1. Chrome → `chrome://extensions` → enable **Developer mode**
+2. **Load unpacked** → select the folder that contains `manifest.json`
+
+Details and UX notes: [HOW_TO_USE.md](HOW_TO_USE.md).
+
+---
+
+## Development
+
+### Requirements
+
+- **Node.js 18+** (for the build script only)
+- npm (comes with Node)
+
+### Commands
 
 ```bash
 npm install
 npm run build
 ```
 
-Or directly: `node build.js`
+- **`npm run build`** — one-shot production bundle (overwrites the three JS files at the repo root).
+- **`npm run dev`** — `node build.js --watch` for iterative work; reload the extension in Chrome after rebuilds.
 
-This overwrites `background.js`, `content.js`, and `dashboard.js` with bundled output. Requires Node.js 18+ and npm.
+The bundler is **esbuild** (`build.js`); sources live under `src/` (TypeScript + React for the dashboard and bubble).
 
-## How It Works
+### Project layout
 
-### Background Service Worker
+```
+.
+├── manifest.json           # MV3 manifest
+├── background.js           # Service worker (built)
+├── content.js / content.css
+├── dashboard.html / dashboard.js / dashboard.css
+├── build.js                # esbuild entry
+├── tsconfig.json
+├── package.json
+├── HOW_TO_USE.md           # End-user guide
+└── src/
+    ├── types.ts
+    ├── config.ts           # Sites and display names
+    ├── background/         # Tracker + action / messages
+    ├── content/            # Bubble UI
+    ├── dashboard/          # Dashboard UI
+    └── utils/              # storage, format, site, chart, …
+```
 
-- Listens to tab activation, tab URL changes, and window focus
-- Uses `chrome.alarms` to tick every 1 minute (reliable when the worker suspends)
-- On each tick, checks that the active tab is focused, on a supported URL, and same date; if so, increments that site's usage for today
-- Responds to `OPEN_DASHBOARD` messages to open the dashboard in a new tab
+---
 
-### Content Script (Bubble)
+## How it works (technical)
 
-- Runs on YouTube, Instagram, and Strava
-- Injects a small floating bubble (top-right)
-- Polls storage every 60s and listens for `chrome.storage.onChanged` to update usage
-- On YouTube fullscreen, hides the bubble; shows it again when exiting fullscreen
-- Bubble hidden state is persisted in storage; can be toggled from the dashboard
+### Background (service worker)
+
+- Subscribes to tab activation, navigation, and window focus.
+- Uses `chrome.alarms` (~1 minute) so counting survives worker suspension.
+- Each tick: if the active tab is focused, on a supported URL, and the calendar day is consistent, increments that site’s seconds for today.
+- Toolbar click opens `dashboard.html`; `OPEN_DASHBOARD` message opens the dashboard in a new tab.
+
+### Content script
+
+- Injected on the three host patterns; renders the bubble, syncs from storage (and on `storage` changes), respects bubble position, snooze, hide, fullscreen on YouTube, and weekly-cap hints.
 
 ### Dashboard
 
-- React app loaded in a full tab (`dashboard.html`)
-- Reads from `chrome.storage.local` and shows summary stats, 7/30‑day chart, and per-site breakdown
-- "Show bubble on sites" toggle controls the persisted bubble visibility
+- Full-page React app: aggregates usage, chart series, settings (bubble, caps).
 
-## Data Format
+### Data model (simplified)
 
-- **Storage key**: `usageTracker`
-- **Usage**: `usage[site][dateKey]` = seconds (e.g. `usage.youtube["2025-03-22"] = 3600`)
-- **Dates**: `YYYY-MM-DD` in local timezone
+- Storage is keyed for usage and UI state (see `src/types.ts` and `src/utils/storage.ts`).
+- Per-day usage: `usage[site][YYYY-MM-DD]` = seconds in **local** timezone.
 
-## Future Enhancements
+---
 
-- Add more sites (extend `config.ts` and manifest `host_permissions`)
-- Export data (CSV/JSON)
-- Daily goals or limits
-- Optional sync (e.g. across devices)
+## Limitations
 
-## Limitations & Assumptions
+- **Granularity:** About **one minute** between ticks (alarm minimum and design).
+- **Accuracy:** Only **focused** active-tab time; not a full “screen time” product across all apps.
+- **Caps:** Reminders only; not a parental control or hard block.
 
-- **Granularity**: Time is recorded in 1‑minute intervals (Chrome alarm minimum)
-- **Accuracy**: Time is only counted when tab + window are focused; background tabs and minimized windows are not counted
-- **Timezone**: All dates use the browser's local timezone
-- **Build tooling**: The build uses Node/npm; if Node is unavailable, use an alternative (e.g. online bundler) or pre-built artifacts
+---
+
+## Possible future enhancements
+
+- More sites (`config.ts` + `host_permissions` in `manifest.json`)
+- Export (CSV/JSON)
+- Stronger goals / limits (still opt-in and clear about behavior)
+
+---
+
+## License / contributing
+
+Add a `LICENSE` file if you want a standard open-source license. Issues and PRs can target the GitHub repo above.
